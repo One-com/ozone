@@ -3,12 +3,12 @@ package ozone
 import (
 	"github.com/One-com/gone/jconf"
 	"github.com/One-com/gone/log"
-	"os"
-	"testing"
 	"io/ioutil"
 	"net"
 	"net/http"
+	"os"
 	"strings"
+	"testing"
 	"time"
 )
 
@@ -81,7 +81,6 @@ var ozoneTestHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Requ
 	w.Write([]byte(teststring))
 })
 
-
 var answerRequestConfig = `{
     "HTTP" : {
         "HelloServer" : {
@@ -138,7 +137,6 @@ func createHandler(name string, js jconf.SubConfig, handlerByName func(string) (
 	})
 	return
 }
-
 
 var proxyConfig = `{
     "HTTP" : {

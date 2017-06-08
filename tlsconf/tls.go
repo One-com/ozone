@@ -1,4 +1,4 @@
-// package tlsconf provides standard JSON configs for server and client TLS listeners, extending
+// Package tlsconf provides standard JSON configs for server and client TLS listeners, extending
 // github.com/One-com/gone/jconf
 // It relies on the presence of and openssl executable to parse OpenSSL ciphers strings
 // - if you use Cipher Format "openssl"
@@ -19,7 +19,7 @@ import (
 )
 
 // To parse the output of "openssl ciphers -V" to get IANA codes for an OpenSSL cipher spec.
-var openSSL_Cipherline_re *regexp.Regexp
+var openSSLCipherlineRe *regexp.Regexp
 
 // CipherConfig specifies a group of TLS ciphers and the format of the cipher specification
 // Available formats are:
@@ -65,7 +65,7 @@ func init() {
 	// like
 	// 0x00,0x3C - AES128-SHA256           TLSv1.2 Kx=RSA      Au=RSA  Enc=AES(128)  Mac=SHA256
 	// multiline mode to parse entire output
-	openSSL_Cipherline_re =
+	openSSLCipherlineRe =
 		regexp.MustCompile("(?m)^\\s+0x(?P<high>[[:xdigit:]]{2}),0x(?P<low>[[:xdigit:]]{2}) - [-\\w]+\\s+(TLS|SSLv3)") // don't care about rest of line
 
 }
@@ -208,7 +208,7 @@ func GetTLSServerConfig(cfg *TLSServerConfig) (tlsConf *tls.Config, err error) {
 	case "RequireAndVerifyClientCert":
 		clientAuthType = tls.RequireAndVerifyClientCert
 	default:
-		err = errors.New(fmt.Sprintf("Invalid ClientAuthType: %s (See Go tls docs)", cfg.ClientAuthType))
+		err = fmt.Errorf("Invalid ClientAuthType: %s (See Go tls docs)", cfg.ClientAuthType)
 		return
 	}
 
@@ -266,7 +266,7 @@ func getCiphers(cfg *CipherConfig) (ciphers []uint16, err error) {
 			err = e
 			return
 		}
-		matches := openSSL_Cipherline_re.FindAllSubmatch(output, -1) // unlimited matches
+		matches := openSSLCipherlineRe.FindAllSubmatch(output, -1) // unlimited matches
 		if matches == nil {
 			err = fmt.Errorf("CipherSpec %s resulted in no ciphers", spec)
 			return

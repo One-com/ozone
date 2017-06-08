@@ -49,7 +49,7 @@ func (ctx *RequestContext) GetSessionId() string {
 // GetRequestCtxInfoKeys return the session info keys
 func (ctx *RequestContext) GetRequestCtxInfoKeys() []string {
 	var keys []string
-	for k, _ := range ctx.sessionInfo {
+	for k := range ctx.sessionInfo {
 		keys = append(keys, k)
 	}
 	return keys

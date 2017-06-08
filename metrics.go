@@ -38,7 +38,7 @@ func loadMetricsConfig(cfg *config.MetricsConfig) (srv *metricsService, err erro
 		var e error
 		ident, e = os.Hostname()
 		if e != nil {
-			ident = "unkown"
+			ident = "unknown"
 		} else {
 			parts := strings.Split(ident, ".")
 			ident = parts[0]

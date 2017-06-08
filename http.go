@@ -33,7 +33,7 @@ func toggleIOActivityTimeout(conn net.Conn, state http.ConnState) {
 // newHTTPServer creates a deamon.Server complying HTTP server from config with the given handler
 func newHTTPServer(name string, cfg config.HTTPServerConfig, snis *tlsPluginRegistry, handler http.Handler) (srv *nshttp.Server, err error) {
 
-	var listeners daemon.ListenerGroup = nil
+	var listeners daemon.ListenerGroup
 
 	var usingReaper bool
 	for _, lcfg := range cfg.Listeners { // ignore name

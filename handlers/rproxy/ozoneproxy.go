@@ -33,7 +33,7 @@ var PLUGINPATH string
 // RIDKEY can be set by linker to define the default log key for request id (default to "rid")
 var RIDKEY string
 
-// RIDHEADER can be by linker to define the default HTTP header for request id (Defauls to "X-Request-ID")
+// RIDHEADER can be by linker to define the default HTTP header for request id (Defaults to "X-Request-ID")
 var RIDHEADER string
 
 func init() {
@@ -167,7 +167,7 @@ func NewProxy(name string, js jconf.SubConfig) (proxy *OzoneProxy, err error) {
 		KeepAlive: 60 * time.Second,
 	}
 
-	default_transport := &http.Transport{
+	defaultTransport := &http.Transport{
 		Dial:                dialer.Dial,
 		TLSClientConfig:     tlsCfg,
 		MaxIdleConns:        maxIdleConns,
@@ -184,18 +184,18 @@ func NewProxy(name string, js jconf.SubConfig) (proxy *OzoneProxy, err error) {
 		reaperInterval := time.Duration(ioActivityTimeout.Nanoseconds()/2) * time.Nanosecond
 		ioActivityTimeoutDialer := reaper.NewIOActivityTimeoutDialer(dialer, ioActivityTimeout, reaperInterval, true)
 
-		default_transport.Dial = ioActivityTimeoutDialer.Dial
+		defaultTransport.Dial = ioActivityTimeoutDialer.Dial
 	}
 
 	var transport http.RoundTripper
 	switch transportType {
 	case "Virtual":
-		transport, err = initVirtualTransport(cc, default_transport, cfg.Transport.Config)
+		transport, err = initVirtualTransport(cc, defaultTransport, cfg.Transport.Config)
 		if err != nil {
 			return nil, err
 		}
 	case "Default":
-		transport = default_transport
+		transport = defaultTransport
 	default:
 		fmt.Printf("Unknown transport: %s", transportType)
 	}
@@ -204,7 +204,7 @@ func NewProxy(name string, js jconf.SubConfig) (proxy *OzoneProxy, err error) {
 	moduleCount := len(cfg.ModuleOrder)
 	modules := make([]rproxymod.ProxyModule, moduleCount)
 
-	var mod_names string
+	//var mod_names string
 	for i, modName := range cfg.ModuleOrder {
 		log.DEBUG(fmt.Sprintf("Adding proxy module \"%s\"", modName))
 		var mod rproxymod.ProxyModule
@@ -222,7 +222,7 @@ func NewProxy(name string, js jconf.SubConfig) (proxy *OzoneProxy, err error) {
 			return
 		}
 		modules[i] = mod
-		mod_names += modName + ","
+		//mod_names += modName + ","
 		log.DEBUG(fmt.Sprintf("Successfully added proxy module \"%s\" (%s)", modName, modCfg.Type))
 	}
 
@@ -418,7 +418,7 @@ SENDRESPONSE:
 	copyHeader(rw.Header(), res.Trailer)
 }
 
-// Deinit is a function hook invoked when the associated HTTP server recieves a shutdown signal
+// Deinit is a function hook invoked when the associated HTTP server receives a shutdown signal
 func (p *OzoneProxy) Deinit() error {
 	var rError string
 	for _, mod := range p.modules {

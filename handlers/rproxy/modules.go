@@ -32,10 +32,14 @@ func preloadBuiltinModules() {
 	moduleRegistry["proxypass"] = proxypass.InitModule
 }
 
-func RegisterReverseProxyModule(name string, initfunc func(jconf.SubConfig) (rproxymod.ProxyModule, error)) {
+// RegisterReverseProxyModule registers an initalization function for a reverse proxy
+// module under a type name, so it can be used in the config.
+// If a "ReverseProxy" handler is configured with this module type name, the
+// supplied init function is called with the module config.
+func RegisterReverseProxyModule(typename string, initfunc func(jconf.SubConfig) (rproxymod.ProxyModule, error)) {
 	moduleRegistryMu.Lock()
 	defer moduleRegistryMu.Unlock()
-	moduleRegistry[name] = initfunc
+	moduleRegistry[typename] = initfunc
 }
 
 func proxyModuleFor(cfg *ModuleConfig) (mod rproxymod.ProxyModule, err error) {

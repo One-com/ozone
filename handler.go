@@ -204,9 +204,8 @@ func handlerForConfig(name string, cfg *config.HandlerConfig) (handler http.Hand
 		default:
 			if hinit, ok := handlerTypes[cfg.Type]; ok {
 				return hinit(name, cfg.Config, handlerByName)
-			} else {
-				err = fmt.Errorf("No such Handler type: %s", cfg.Type)
 			}
+			err = fmt.Errorf("No such Handler type: %s", cfg.Type)
 		}
 	}
 

@@ -14,7 +14,7 @@ type ProxyModule interface {
 	// reqCtx contains cross module context, a logger and a proxy global cache.
 	ProcessRequest(reqCtx *RequestContext, inReq *http.Request, proxyReq *http.Request) (*http.Response, error)
 
-	// ModifyResponse allows you to modify the reponse from the backend.
+	// ModifyResponse allows you to modify the response from the backend.
 	// It's called in reverse module order.
 	ModifyResponse(reqCtx *RequestContext, inReq *http.Request, resp *http.Response) error
 

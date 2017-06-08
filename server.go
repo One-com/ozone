@@ -71,13 +71,13 @@ func instantiateServersFromConfig(cfgdata interface{}) (servers []daemon.Server,
 	}
 
 	// Initialize internal services like metrics and SNI (if configured)
-	metrics_service, err := loadMetricsConfig(&cfg.Metrics)
+	metricsService, err := loadMetricsConfig(&cfg.Metrics)
 	if err != nil {
 		log.CRIT("Error processing 'Metrics' configuration section", "err", err)
 		return
 	}
-	if metrics_service != nil {
-		servers = append(servers, metrics_service)
+	if metricsService != nil {
+		servers = append(servers, metricsService)
 	}
 
 	tlsPluginRegistry := newTLSPluginRegistry(cfg.TLSPluginDir, cfg.TLSPlugins, cfg.SNI)
