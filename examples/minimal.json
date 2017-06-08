@@ -1,0 +1,21 @@
+{
+    "HTTP" : {
+        "HelloServer" : {
+            "Listeners" : {
+                "http" : {
+                    "Port" : 8181
+                }
+            },
+            "Handler" : "redir"
+        }
+    },
+    "Handlers" : {
+        "redir" : {
+            "Type" : "Redirect",
+            "Config" : {
+                "Code" : 302,
+                "URL" : "https://github.com/"
+            }
+        }
+    }
+}

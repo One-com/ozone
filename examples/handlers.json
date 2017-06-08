@@ -1,0 +1,36 @@
+{
+    "Log" : {
+        "AccessLog" : "access.log"
+    },
+    "HTTP" : {
+        "HelloServer" : {
+            "IdleTimeout" : "4s",
+            "Listeners" : {
+                "http" : {
+                    "IOActivityTimeout" : "10s",
+                    "Port" : 8181
+                }
+            },
+            "Handler" : {
+                "/static" : "statichandler",
+                "/config" : "confighandler",
+                "/plugin" : "pluginhandler"
+            }
+        }
+    },
+    "Handlers" : {
+        "pluginhandler" :{
+            "Type" : "hello",
+            "Plugin" : "hello.so",
+            "Config" : {
+                "Who" : "from plugin"
+            }
+        },
+        "confighandler" : {
+            "Type" : "configurable",
+            "Config" : {
+                "Response" : "Hello from config"
+            }
+        }
+    }
+}
