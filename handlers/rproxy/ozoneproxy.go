@@ -354,7 +354,12 @@ func (p *OzoneProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		case x509.CertificateInvalidError, x509.HostnameError, x509.UnknownAuthorityError, x509.ConstraintViolationError:
 			rw.WriteHeader(http.StatusBadGateway)
 		default:
-			rw.WriteHeader(http.StatusInternalServerError)
+			// Test whether the req. was just canceled
+			if outreq.Context().Err() == context.Canceled {
+				http.Error(rw, err.Error(), 499) // nginx compliant client cancellation code.
+			} else {
+				rw.WriteHeader(http.StatusInternalServerError)
+			}
 		}
 		return
 	}
