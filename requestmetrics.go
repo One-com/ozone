@@ -29,7 +29,7 @@ func (m *status_meter) Measure(rec rrwriter.RecordingResponseWriter) {
 }
 
 type size_meter struct {
-	meter *metric.Histogram
+	meter metric.Histogram
 }
 
 func (m *size_meter) Measure(rec rrwriter.RecordingResponseWriter) {
@@ -66,17 +66,17 @@ func metricsFunction(name, spec string) accesslog.AuditFunction {
 		switch {
 		case spc == "size":
 			log.DEBUG("Creating size metric")
-			meter := metric.NewHistogram(name + ".resp-size")
+			meter := metric.RegisterHistogram(name + ".resp-size")
 			meters = append(meters, &size_meter{meter: meter})
 		case matched_ddd:
 			i, _ := strconv.Atoi(spc)
 			log.DEBUG("Creating status metric", "code", spc)
-			meter := metric.NewCounter(name + ".code." + spc)
+			meter := metric.RegisterCounter(name + ".code." + spc)
 			meters = append(meters, &status_meter{test: exactCodeTest(i), meter: meter})
 		case matched_dxx:
 			i, _ := strconv.Atoi(spc[0:1])
 			log.DEBUG("Creating status metric", "code", spc)
-			meter := metric.NewCounter(name + ".code." + spc)
+			meter := metric.RegisterCounter(name + ".code." + spc)
 			meters = append(meters, &status_meter{test: rangeCodeTest(i * 100), meter: meter})
 		}
 	}
