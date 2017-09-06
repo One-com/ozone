@@ -10,6 +10,7 @@ import (
 	"github.com/One-com/gone/http/vtransport"
 	"github.com/One-com/gone/http/vtransport/upstream/rr"
 
+	"github.com/One-com/gone/log"
 	"github.com/One-com/gone/jconf"
 
 	"github.com/One-com/ozone/rproxymod"
@@ -72,6 +73,8 @@ func initVirtualTransport(cc rproxymod.Cache, wrapped *http.Transport, js jconf.
 
 	rrcache := &rrPinCache{cc: cc}
 
+	logger := log.Default()
+
 	upstreams := make(map[string]vtransport.VirtualUpstream)
 	for k, v := range cfg.Upstreams {
 		var urls = make([]*url.URL, 0)
@@ -83,6 +86,15 @@ func initVirtualTransport(cc rproxymod.Cache, wrapped *http.Transport, js jconf.
 			}
 			urls = append(urls, url)
 		}
+
+		logf := func(e rr.Event) {
+			target := ""
+			if e.Target != nil {
+				target = e.Target.String()
+			}
+			logger.Printf("Virtual Transport: %s, %s %s", k, e.Name, target)
+		}
+
 		upstreams[k], err = rr.NewRoundRobinUpstream(
 			rr.Targets(urls...),
 			rr.PinRequestsWith(rrcache, cfg.BackendPin.Duration,
@@ -91,7 +103,8 @@ func initVirtualTransport(cc rproxymod.Cache, wrapped *http.Transport, js jconf.
 					return key
 				})),
 			rr.MaxFails(cfg.MaxFails),
-			rr.Quarantine(cfg.Quarantine.Duration))
+			rr.Quarantine(cfg.Quarantine.Duration),
+			rr.EventCallback(logf))
 		if err != nil {
 			return nil, err
 		}
