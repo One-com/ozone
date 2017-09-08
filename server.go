@@ -71,7 +71,7 @@ func instantiateServersFromConfig(cfgdata interface{}) (servers []daemon.Server,
 	}
 
 	// Initialize internal services like metrics and SNI (if configured)
-	metricsService, err := loadMetricsConfig(&cfg.Metrics)
+	metricsService, err := loadMetricsConfig(cfg.Metrics)
 	if err != nil {
 		log.CRIT("Error processing 'Metrics' configuration section", "err", err)
 		return
@@ -90,7 +90,10 @@ func instantiateServersFromConfig(cfgdata interface{}) (servers []daemon.Server,
 	defer handlerResolutionMutex.Unlock()
 	handlerResolutionReset(cfg.Handlers)
 
-	accessLogSpec := cfg.Log.AccessLog
+	accessLogSpec := ""
+	if cfg.Log != nil {
+		accessLogSpec = cfg.Log.AccessLog
+	}
 
 HTTP_SETUP:
 	for srvName, srvCfg := range cfg.HTTPServers {

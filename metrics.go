@@ -23,7 +23,7 @@ type metricsService struct {
 
 func loadMetricsConfig(cfg *config.MetricsConfig) (srv *metricsService, err error) {
 
-	if cfg.Address == "" || cfg.Ident == "" {
+	if cfg == nil || cfg.Address == "" || cfg.Ident == "" {
 		return
 	}
 

@@ -102,10 +102,10 @@ type LogConfig struct {
 
 // Config defined JSON for the top level server config
 type Config struct {
-	Log          LogConfig                `json:"Log,omitempty"`
+	Log          *LogConfig                `json:",omitempty"`
 	HTTPServers  HTTPServersConfig        `json:"HTTP"`
 	Handlers     HandlersConfig           `json:"Handlers"`
-	Metrics      MetricsConfig            `json:"Metrics,omitempty"`
+	Metrics      *MetricsConfig            `json:",omitempty"`
 	SNI          *jconf.OptionalSubConfig `json:"SNI,omitempty"` // a special backwards compatible option
 	TLSPlugins   TLSPluginsConfig         `json:",omitempty"`
 	TLSPluginDir string                   `json:",omitempty"`
