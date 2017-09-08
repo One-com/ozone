@@ -111,7 +111,7 @@ func initVirtualTransport(cc rproxymod.Cache, wrapped *http.Transport, js jconf.
 	}
 
 	vt = &vtransport.VirtualTransport{
-		Transport:   *wrapped,
+		Transport:   wrapped,
 		Upstreams:   upstreams,
 		RetryPolicy: vtransport.Retries(cfg.Retries, 0, false),
 	}
