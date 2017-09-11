@@ -50,7 +50,7 @@ func NewYbcCache(cfg jconf.SubConfig) (cacher *YbcCache, err error) {
 		MaxItemsCount: ybc.SizeT(yc.MaxItemsCount),
 	}
 
-	ybcCache, err := config.OpenSimpleCache(yc.MaxItemSize, true)
+	ybcCache, err := config.OpenSimpleCache(true)
 	if err != nil {
 		return
 	}

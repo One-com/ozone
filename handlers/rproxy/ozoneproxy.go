@@ -91,6 +91,7 @@ type OzoneProxy struct {
 	reverseProxy
 	modules []rproxymod.ProxyModule
 	cache   rproxymod.Cache
+	service func(context.Context) error
 }
 
 // NewProxy instantiates a new reverse proxy handler based on the provided JSON config
@@ -188,9 +189,10 @@ func NewProxy(name string, js jconf.SubConfig) (proxy *OzoneProxy, err error) {
 	}
 
 	var transport http.RoundTripper
+	var service func(context.Context) error // if non-nil, should be called to perform autonomous handler activity
 	switch transportType {
 	case "Virtual":
-		transport, err = initVirtualTransport(cc, defaultTransport, cfg.Transport.Config)
+		transport, service, err = initVirtualTransport(cc, defaultTransport, cfg.Transport.Config)
 		if err != nil {
 			return nil, err
 		}
@@ -234,11 +236,39 @@ func NewProxy(name string, js jconf.SubConfig) (proxy *OzoneProxy, err error) {
 		modules: modules,
 		//name:    name + "[" + mod_names + "]",
 		cache: cc,
+		service : service,
 	}
 
 	return proxy, nil
 }
 
+// An object representing any autonomous activity the proxy handler might
+// perform - like health check on backends.
+type proxyservice struct{
+	service func(context.Context) error
+}
+
+// Service returns any activity object the proxy might want to perform.
+// To start the activity, call Serve(context) on the returned object.
+// The activity will run to the context is canceled.
+func (p *OzoneProxy) Service() *proxyservice {
+	if p.service != nil {
+		return &proxyservice{service: p.service}
+	}
+	return nil
+}
+
+// Serve makes the proxyservice perform its activity.
+// This can be used to monitor backend health.
+func (p *proxyservice) Serve(ctx context.Context) error {
+	return p.service(ctx)
+}
+
+func (p *proxyservice) Description() string {
+	return "Ozone proxy backend health monitor"
+}
+
+// ServeHTTP implements stdlib http.Handler
 func (p *OzoneProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	DEBUGlogf, debug := log.DEBUGok()
@@ -425,6 +455,7 @@ SENDRESPONSE:
 
 // Deinit is a function hook invoked when the associated HTTP server receives a shutdown signal
 func (p *OzoneProxy) Deinit() error {
+
 	var rError string
 	for _, mod := range p.modules {
 		err := mod.Deinit()

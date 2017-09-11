@@ -35,6 +35,7 @@ var (
 	handlerResolutionMap  map[string]http.Handler
 	handlerCfg            config.HandlersConfig
 	handlerCleanups       []daemon.CleanupFunc
+	handlerServices       []daemon.Server
 	handlerResolutionPath []string // to detect handler cycles
 )
 
@@ -68,6 +69,7 @@ func handlerResolutionReset(cfg config.HandlersConfig) {
 	handlerResolutionMap = make(map[string]http.Handler)
 	handlerCfg = cfg
 	handlerCleanups = nil
+	handlerServices = nil
 	handlerResolutionPath = nil // detecting cycles
 }
 
@@ -150,11 +152,14 @@ func handlerByName(name string) (handler http.Handler, err error) {
 	// We didn't have the handler ready. Configure the handler from config.
 	var cleanupfuncs []daemon.CleanupFunc
 	var cf daemon.CleanupFunc
-	handler, cf, err = handlerForConfig(name, &cfg)
+	var handlerservice daemon.Server
+
+	handler, handlerservice, cf, err = handlerForConfig(name, &cfg)
 	if err != nil {
 		return
 	}
 	if cf != nil {
+		// appending to a slice, since we might add another below in wrapping
 		cleanupfuncs = append(cleanupfuncs, cf)
 	}
 	if handler != nil {
@@ -173,11 +178,14 @@ func handlerByName(name string) (handler http.Handler, err error) {
 		handlerResolutionMap[name] = handler
 	}
 
+	if handlerservice != nil {
+		handlerServices = append(handlerServices, handlerservice)
+	}
 	handlerCleanups = append(handlerCleanups, cleanupfuncs...)
 	return
 }
 
-func handlerForConfig(name string, cfg *config.HandlerConfig) (handler http.Handler, cleanup daemon.CleanupFunc, err error) {
+func handlerForConfig(name string, cfg *config.HandlerConfig) (handler http.Handler, service daemon.Server, cleanup daemon.CleanupFunc, err error) {
 
 	// Load the handler from a plugin
 	if cfg.Plugin != "" {
@@ -195,6 +203,7 @@ func handlerForConfig(name string, cfg *config.HandlerConfig) (handler http.Hand
 			proxy, err = rproxy.NewProxy(name, cfg.Config)
 			if err == nil {
 				cleanup = proxy.Deinit
+				service = proxy.Service()
 				handler = proxy
 			}
 		//case "NotFound":
@@ -203,7 +212,8 @@ func handlerForConfig(name string, cfg *config.HandlerConfig) (handler http.Hand
 			handler, err = makeRedirectHandler(cfg.Config)
 		default:
 			if hinit, ok := handlerTypes[cfg.Type]; ok {
-				return hinit(name, cfg.Config, handlerByName)
+				h, c, e := hinit(name, cfg.Config, handlerByName)
+				return h, nil, c, e
 			}
 			err = fmt.Errorf("No such Handler type: %s", cfg.Type)
 		}
