@@ -203,10 +203,11 @@ func initVirtualTransport(cc rproxymod.Cache, wrapped *http.Transport, js jconf.
 	servicefunc = func(ctx context.Context) error {
 		var wg sync.WaitGroup
 		for s := range services {
+			i := s
 			wg.Add(1)
 			// All these go-routines will exit when ctx is canceled.
 			go func() {
-				services[s](ctx)
+				services[i](ctx)
 				wg.Done()
 			}()
 		}
