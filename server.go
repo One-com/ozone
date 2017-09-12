@@ -71,8 +71,9 @@ func instantiateServersFromConfig(cfgdata interface{}) (servers []daemon.Server,
 	}
 
 	// Initialize internal services like metrics and SNI (if configured)
-	metricsService, err := loadMetricsConfig(cfg.Metrics)
-	if err != nil {
+	metricsService, e := loadMetricsConfig(cfg.Metrics)
+	if e != nil {
+		err = e
 		log.CRIT("Error processing 'Metrics' configuration section", "err", err)
 		return
 	}
@@ -130,8 +131,9 @@ HTTP_SETUP:
 		if logcleanup != nil {
 			cleanups = append(cleanups, logcleanup)
 		}
-		server, err := newHTTPServer(srvName, srvCfg, tlsPluginRegistry, wrappedHandler)
-		if err != nil {
+		server, e := newHTTPServer(srvName, srvCfg, tlsPluginRegistry, wrappedHandler)
+		if e != nil {
+			err = e
 			log.CRIT(fmt.Sprintf("Failed to initialize service '%s'", srvName), "err", err)
 			break HTTP_SETUP
 		}
