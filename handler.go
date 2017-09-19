@@ -203,7 +203,10 @@ func handlerForConfig(name string, cfg *config.HandlerConfig) (handler http.Hand
 			proxy, err = rproxy.NewProxy(name, cfg.Config)
 			if err == nil {
 				cleanup = proxy.Deinit
-				service = proxy.Service()
+				srv := proxy.Service()
+				if srv != nil {
+					service = srv
+				}
 				handler = proxy
 			}
 		//case "NotFound":
