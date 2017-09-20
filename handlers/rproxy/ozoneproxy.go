@@ -320,7 +320,9 @@ func (p *OzoneProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		// If module gave an alternate response, don't contact upstream
 		// this would be mostly for http redirect/not-found/method-not-allowed/auth-challenge response
 		if res != nil {
-			outreq.Body.Close()
+			if outreq.Body != nil {
+				outreq.Body.Close()
+			}
 			if propagateCancel {
 				// Check that the client is still there
 				select {
