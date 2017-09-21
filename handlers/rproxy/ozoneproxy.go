@@ -381,7 +381,7 @@ func (p *OzoneProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	// If the last RoundTrip failed....
 	if err != nil {
-		p.logf("http: proxy error: %v, URI:%s", err, outreq.URL.String())
+		p.logf("http: proxy error: %v, REQ:%s %s", err, outreq.Method, outreq.URL.String())
 		switch err.(type) {
 		case x509.CertificateInvalidError, x509.HostnameError, x509.UnknownAuthorityError, x509.ConstraintViolationError:
 			rw.WriteHeader(http.StatusBadGateway)
