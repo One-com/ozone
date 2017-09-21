@@ -151,15 +151,19 @@ func initVirtualTransport(cc rproxymod.Cache, wrapped *http.Transport, js jconf.
 
 		RROptions := []rr.RROption{
 			rr.Targets(urls...),
-			rr.PinRequestsWith(rrcache, rrcfg.BackendPin.Duration,
-				rr.PinKeyFunc(func(req *http.Request) string {
-					key := req.Header.Get(rrcfg.RoutingKeyHeader)
-					return key
-				})),
 			rr.MaxFails(rrcfg.MaxFails),
 			rr.Quarantine(rrcfg.Quarantine.Duration),
 			rr.BurstFailGrace(rrcfg.BurstFailGrace.Duration),
 			rr.EventCallback(logfunc),
+		}
+
+		if rrcfg.BackendPin.Duration != 0 {
+			pinoption := rr.PinRequestsWith(rrcache, rrcfg.BackendPin.Duration,
+				rr.PinKeyFunc(func(req *http.Request) string {
+					key := req.Header.Get(rrcfg.RoutingKeyHeader)
+					return key
+				}))
+			RROptions = append(RROptions, pinoption)
 		}
 
 		if rrcfg.HealthCheck != nil &&
