@@ -136,15 +136,16 @@ func initVirtualTransport(cc rproxymod.Cache, wrapped *http.Transport, js jconf.
 			urls = append(urls, url)
 		}
 
+		upname := k
 		logfunc := func(e rr.Event) {
 			target := ""
 			if e.Target != nil {
 				target = e.Target.String()
 			}
 			if e.Err == nil {
-				logger.Printf("Virtual Transport: %s, %s %s", k, e.Name, target)
+				logger.Printf("Virtual Transport: %s, %s %s", upname, e.Name, target)
 			} else {
-				logger.Printf("Virtual Transport: %s, %s %s: %s", k, e.Name, target, e.Err.Error())
+				logger.Printf("Virtual Transport: %s, %s %s: %s", upname, e.Name, target, e.Err.Error())
 			}
 		}
 
