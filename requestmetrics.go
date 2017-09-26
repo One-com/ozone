@@ -1,6 +1,7 @@
 package ozone
 
 import (
+	"time"
 	"regexp"
 	"strconv"
 	"strings"
@@ -37,6 +38,18 @@ func (m *size_meter) Measure(rec rrwriter.RecordingResponseWriter) {
 	m.meter.Sample(int64(size))
 }
 
+type time_meter struct {
+	meter metric.Timer
+}
+
+func (m *time_meter) Measure(rec rrwriter.RecordingResponseWriter) {
+	t := rec.GetTimeStamp()
+	if !t.IsZero() {
+		m.meter.Sample(time.Since(t))
+	}
+}
+
+
 // make a function testing status code for exact value
 func exactCodeTest(val int) func(int) bool {
 	return func(code int) bool {
@@ -64,6 +77,10 @@ func metricsFunction(name, spec string) accesslog.AuditFunction {
 		matched_ddd, _ := regexp.MatchString("\\d\\d\\d", spc)
 		matched_dxx, _ := regexp.MatchString("\\d[xX]{2}", spc)
 		switch {
+		case spc == "time":
+			log.DEBUG("Creating time metric")
+			meter := metric.RegisterTimer(name + ".resp-time")
+			meters = append(meters, &time_meter{meter: meter})
 		case spc == "size":
 			log.DEBUG("Creating size metric")
 			meter := metric.RegisterHistogram(name + ".resp-size")
