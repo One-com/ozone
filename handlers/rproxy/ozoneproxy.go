@@ -89,9 +89,10 @@ type ProxyConfig struct {
 // but in general control every aspect of the proxy behavior.
 type OzoneProxy struct {
 	reverseProxy
-	modules []rproxymod.ProxyModule
-	cache   rproxymod.Cache
-	service func(context.Context) error
+	modules  []rproxymod.ProxyModule
+	modnames []string
+	cache    rproxymod.Cache
+	service  func(context.Context) error
 }
 
 // NewProxy instantiates a new reverse proxy handler based on the provided JSON config
@@ -234,6 +235,7 @@ func NewProxy(name string, js jconf.SubConfig) (proxy *OzoneProxy, err error) {
 			// We can ignore Director - it will never get called.
 		},
 		modules: modules,
+		modnames: cfg.ModuleOrder,
 		//name:    name + "[" + mod_names + "]",
 		cache: cc,
 		service : service,
@@ -311,9 +313,10 @@ func (p *OzoneProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	for _, mod := range p.modules {
+	for j, mod := range p.modules {
 		res, err = mod.ProcessRequest(reqCtx, req, outreq)
 		if err != nil {
+			log.ERROR(fmt.Sprintf("rproxy mod(%s) error", p.modnames[j]), "err", err)
 			sendErrorResponse(rw, http.StatusInternalServerError, err)
 			return
 		}
