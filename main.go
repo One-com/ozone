@@ -133,7 +133,6 @@ type Option func(*runcfg)
 var cfg = runcfg{
 	readymessage:    "Ready and serving",
 	controlsocket:   "./ozone-control.sock",
-	shutdowntimeout: time.Duration(5 * time.Second),
 }
 
 // DumpConfig makes Ozone dry-run and exit after dumping the parsed configuration to os.Stdout
@@ -239,7 +238,7 @@ func ozonemain(config interface{}, opts ...Option) error {
 	runoptions := []daemon.RunOption{
 		daemon.Configurator(configureFunc),
 		daemon.ControlSocket("", cfg.controlsocket),
-		daemon.ShutdownTimeout(time.Duration(cfg.shutdowntimeout) * time.Second),
+		daemon.ShutdownTimeout(cfg.shutdowntimeout),
 		daemon.SdNotifyOnReady(true, cfg.readymessage),
 		daemon.SignalParentOnReady(),
 	}
