@@ -20,13 +20,28 @@ import (
 	"github.com/One-com/gone/netutil/reaper"
 )
 
-// Callback turning access logging on/off for use as a http.Server.ConnState callback
-func toggleIOActivityTimeout(conn net.Conn, state http.ConnState) {
-	switch state {
-	case http.StateNew, http.StateActive:
-		reaper.IOActivityTimeout(conn, true)
-	case http.StateIdle, http.StateClosed, http.StateHijacked:
-		reaper.IOActivityTimeout(conn, false)
+
+func reaperConnStateCallback(to time.Duration) func(net.Conn, http.ConnState) {
+
+	return func (conn net.Conn, state http.ConnState) {
+		switch state {
+		case http.StateNew:
+			// Put a timebomb on the connection requiring it to
+			// go into active state fast enough, to timeout on TLS handshake.
+			if to != time.Duration(0) {
+				f := func(w net.Conn) {
+					w.Close()
+				}
+				reaper.StartTimer(conn, to, f)
+			}
+		case http.StateActive:
+			if to != time.Duration(0) {
+				reaper.StopTimer(conn)
+			}
+			reaper.IOActivityTimeout(conn, true)
+		case http.StateIdle, http.StateClosed, http.StateHijacked:
+			reaper.IOActivityTimeout(conn, false)
+		}
 	}
 }
 
@@ -35,7 +50,6 @@ func newHTTPServer(name string, cfg config.HTTPServerConfig, snis *tlsPluginRegi
 
 	var listeners daemon.ListenerGroup
 
-	var usingReaper bool
 	for _, lcfg := range cfg.Listeners { // ignore name
 		addr := lcfg.Address + ":" + strconv.Itoa(lcfg.Port)
 
@@ -62,15 +76,13 @@ func newHTTPServer(name string, cfg config.HTTPServerConfig, snis *tlsPluginRegi
 			InheritOnly:    lcfg.SocketInheritOnly,
 		}
 
-		if lcfg.IOActivityTimeout.Duration != time.Duration(0) {
-			usingReaper = true
-			to := lcfg.IOActivityTimeout.Duration
-			reaperInterval := to / time.Duration(2)
 
-			listener.PrepareListener = func(lin net.Listener) (lout net.Listener) {
-				lout = reaper.NewIOActivityTimeoutListener(lin, to, reaperInterval)
-				return
-			}
+		to := lcfg.IOActivityTimeout.Duration
+		reaperInterval := to / time.Duration(2)
+
+		listener.PrepareListener = func(lin net.Listener) (lout net.Listener) {
+			lout = reaper.NewIOActivityTimeoutListener(lin, to, reaperInterval)
+			return
 		}
 
 		listeners = append(listeners, listener)
@@ -94,9 +106,9 @@ func newHTTPServer(name string, cfg config.HTTPServerConfig, snis *tlsPluginRegi
 		ReadTimeout:       cfg.ReadTimeout.Duration,
 		WriteTimeout:      cfg.WriteTimeout.Duration,
 	}
-	if usingReaper {
-		httpserver.ConnState = toggleIOActivityTimeout
-	}
+
+	httpserver.ConnState = reaperConnStateCallback(cfg.NewActiveTimeout.Duration)
+
 	if cfg.DisableKeepAlives {
 		httpserver.SetKeepAlivesEnabled(false)
 	}

@@ -57,6 +57,8 @@ type HTTPServerConfig struct {
 	IdleTimeout       jconf.Duration
 	ReadTimeout       jconf.Duration
 	WriteTimeout      jconf.Duration
+
+	NewActiveTimeout  jconf.Duration
 }
 
 // RedirectHandlerConfig is configuration for a 30X redirect handler
