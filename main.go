@@ -16,6 +16,7 @@ import (
 )
 
 func init() {
+	// Default to a simple systemd compatible log on stdout
 	log.Minimal()
 }
 
@@ -26,6 +27,12 @@ type configDumper interface {
 
 type dryRunFunc func() (configDumper, error)
 
+// loadConfig will generate 2 functions to act on the result on using the config to instantiate
+// everything from all the subconfigs.
+// Calling either of these 2 functions will parse all config and initalize a server based on it.
+// Calling configF will then return the initalized server ready for running.
+// Calling dryrunF will throw away the server and instead dump the total parsed config to the
+// provided configDumper
 func loadConfig(cfgSpec interface{}) (configF daemon.ConfigFunc, dryrunF dryRunFunc) {
 
 	configFunc := func() (s []daemon.Server, c []daemon.CleanupFunc, newCfg configDumper, err error) {
@@ -54,49 +61,60 @@ func loadConfig(cfgSpec interface{}) (configF daemon.ConfigFunc, dryrunF dryRunF
 	return
 }
 
+// A generic log function for lower level code.
 func serverLogFunc(level int, message string) {
 	log.Default().LogFromCaller(3, syslog.Priority(level), message)
 }
 
 /**************** SIGNAL HANDLING *******************/
 
+// onSignalExit will ask the daemon to exit without waiting for graceful shutdown.
 func onSignalExit() {
 	log.Println("Signal Exit")
 	daemon.Exit(false)
 }
 
+// onSignalExitGraceful will ask the daemon to exit waiting for graceful shutdown
 func onSignalExitGraceful() {
 	log.Println("Signal Exit")
 	daemon.Exit(true)
 }
 
+// onSignalReload will ask the daemon to configure a new set of server objects
+// to replace the old server objects letting the old shutdown gracefully.
 func onSignalReload() {
 	log.Println("Signal Reload")
 	daemon.Reload()
 }
 
+// onSignalRespawn will fork/exec a new daemon process, re-initialized from config
+// which will then ask the old daemon process to shutdown.
 func onSignalRespawn() {
 	log.Println("Signal Respawn")
 	daemon.ReplaceProcess(syscall.SIGTERM)
 }
 
+// onSignalIncLogLevel will increase the log level for the default logger.
 func onSignalIncLogLevel() {
 	log.IncLevel()
 	log.Print(fmt.Sprintf("Log level: %d", log.Level()))
 }
 
+// onSignalDecLogLevel will decrease the log level for the default logger.
 func onSignalDecLogLevel() {
 	log.DecLevel()
 	log.Print(fmt.Sprintf("Log level: %d\n", log.Level()))
 }
 
+// onSignalReopenAccessLogFiles will ask any configured HTTP handler access log files
+// to be re-opened. (for external log rotation)
 func onSignalReopenAccessLogFiles() {
 	ReopenAccessLogFiles()
 }
 
 // HandledSignals is a map (syscall.Signal->func()) defining default
 // OS signals to handle and how.
-// Change this before calling Init() if you need.
+// Change this by assigning to HandledSignals before calling Init() if you need.
 // Default signals:
 //
 //   SIGINT: Exit immediately
@@ -120,10 +138,10 @@ var HandledSignals = signals.Mappings{
 /******************* Options ***********************************/
 
 type runcfg struct {
-	dryrun          bool
-	controlsocket   string
-	shutdowntimeout time.Duration
-	readymessage    string
+	dryrun          bool           // just call dryrunF and exit.
+	controlsocket   string         // path of the UNIX control socket
+	shutdowntimeout time.Duration  // default delay to wait for graceful shutdown
+	readymessage    string         // Message to send over systemd notify socket when ready
 }
 
 // Option to pass to Init()
@@ -191,10 +209,17 @@ func Init(opts ...Option) {
 
 func internalInit(doinit bool, opts ...Option) {
 
+	// initialize config from options
 	for _, o := range opts {
 		o(&cfg)
 	}
 
+	// Setup default ozone configuration unless disabled.
+	// If you want something else, call DisableInit() instead of Init()
+	// Any options can be passed to Main()
+	// * configure logging
+	// * configure basic "daemon" control socket command
+	// * Run the default signal handler
 	initOnce.Do(func() {
 
 		if doinit {

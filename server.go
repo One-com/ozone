@@ -33,6 +33,7 @@ type TLSPluginConfigureFunc func(name string, cfg jconf.SubConfig) (func(*tls.Co
 var tlsPluginTypes = map[string]TLSPluginConfigureFunc{}
 
 // RegisterTLSPluginType makes a named type of TLS plugin available via config.
+// Not go-routine safe.
 func RegisterTLSPluginType(typename string, f TLSPluginConfigureFunc) {
 	tlsPluginTypes[typename] = f
 }
@@ -81,6 +82,7 @@ func instantiateServersFromConfig(cfgdata interface{}) (servers []daemon.Server,
 		servers = append(servers, metricsService)
 	}
 
+	// Create a TLSPluginRegistry with the legacy cfg.SNI config as default config.
 	tlsPluginRegistry := newTLSPluginRegistry(cfg.TLSPluginDir, cfg.TLSPlugins, cfg.SNI)
 
 	//-----------------------------------------------------------
@@ -102,35 +104,42 @@ HTTP_SETUP:
 		var handler http.Handler
 		var handlerSpec interface{}
 
+		// Allow for server handler specification to be more than a string.
+		// ...mostly used for a mux.
 		handlerJSON := srvCfg.Handler
 		err = handlerJSON.ParseInto(&handlerSpec)
 		if err != nil {
 			break HTTP_SETUP
 		}
 
-		// shadow accessLogspec
+		// shadow accessLogspec to set the default - if any.
 		accessLogSpec := accessLogSpec
 		if srvCfg.AccessLog != "" {
 			accessLogSpec = srvCfg.AccessLog
 		}
 
+		// Look up the HTTP handler for this server by handlerSpec
 		handler, err = handlerForSpec(srvName, handlerSpec)
 		if err != nil {
 			break HTTP_SETUP // bail out, return error
 		}
 
-		// Append service to list if everything OK
-		// Wrap it in any access logging and/or metrics
+		// If handler lookup is OK, Wrap it in any access logging and/or metrics,
+		// Create the server with the resulting handler and append it to the
+		// list of servers to serve.
+
+		// any metrics for this server.
 		var mfunc accesslog.AuditFunction
 		if srvCfg.Metrics != "" {
 			mfunc = metricsFunction(srvName, srvCfg.Metrics)
 		}
 
-		// Always wrap handler to allow dynamic accesslog
+		// Always wrap handler with audithandler to allow dynamic accesslog.
 		wrappedHandler, logcleanup := wrapAuditHandler(srvName, handler, accessLogSpec, mfunc)
 		if logcleanup != nil {
 			cleanups = append(cleanups, logcleanup)
 		}
+		// Create the actual server with the resulting handler
 		server, e := newHTTPServer(srvName, srvCfg, tlsPluginRegistry, wrappedHandler)
 		if e != nil {
 			err = e
@@ -186,13 +195,14 @@ func getTLSServerConfigWithPlugin(cfg *config.TLSServerConfig, plugins *tlsPlugi
 	return
 }
 
+// For managing the TLS plugin resolution
 type tlsPluginRegistry struct {
 	// plugin dir
 	dir string
 	// map of available configs - by name
 	cfg config.TLSPluginsConfig
 
-	// map of instantiated tls plugisn - by name
+	// map of instantiated tls plugins - by name
 	callbacks map[string]func(*tls.Config) error
 
 	// resulting services and cleanups
@@ -200,11 +210,12 @@ type tlsPluginRegistry struct {
 	Cleanups []daemon.CleanupFunc
 }
 
+// newTLSPluginRegistry initializes a tlsPluginRegistry for plugin resolution with a default plugin entry named ""
 func newTLSPluginRegistry(plugindir string, tlsplugcfg config.TLSPluginsConfig, defaultcfg *jconf.OptionalSubConfig) (registry *tlsPluginRegistry) {
 
 	// Add fallback legacy default plugin
 	if tlsplugcfg == nil {
-		tlsplugcfg = make(config.TLSPluginsConfig)
+		tlsplugcfg = make(config.TLSPluginsConfig) // make a map (notice the plural)
 	}
 	tlsplugcfg[""] = config.TLSPluginConfig{Type: "", Plugin: "default_sni.so", Config: defaultcfg}
 
@@ -217,6 +228,8 @@ func newTLSPluginRegistry(plugindir string, tlsplugcfg config.TLSPluginsConfig, 
 	return
 }
 
+// getTLSPlugin returns a tls.Config manipulating callback based on it's name, or...
+// in the case it's not configured, create it from plugins.
 func (r *tlsPluginRegistry) getTLSPlugin(name string) (cb func(*tls.Config) error, err error) {
 
 	var exists bool
