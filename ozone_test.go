@@ -10,12 +10,12 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	stdlog "log"
 )
 
 func init() {
 	log.SetOutput(ioutil.Discard)
-	RegisterStaticHTTPHandler("OzoneTest", ozoneTestHandler)
-	RegisterHTTPHandlerType("testhandler", createHandler)
 }
 
 func TestMain(m *testing.M) {
@@ -25,8 +25,9 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+// used by tests to shutdown the test server via the control socket
 func shutdown(t *testing.T) {
-	time.Sleep(time.Second)
+	time.Sleep(100*time.Millisecond)
 	addr, err := net.ResolveUnixAddr("unix", "@ozonetest")
 	if err != nil {
 		t.Fatal(err)
@@ -62,10 +63,15 @@ var stopconfig = `{
 }
 `
 
+// TestStop just tests the stop function.
 func TestStop(t *testing.T) {
 	var done = make(chan struct{})
+	// Close the done chan when main exits (as it should)
 	go func() {
-		ozonemain(strings.NewReader(stopconfig))
+		err := ozonemain(strings.NewReader(stopconfig))
+		if err != nil {
+			stdlog.Fatal(err)
+		}
 		close(done)
 	}()
 
@@ -81,6 +87,10 @@ var ozoneTestHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Requ
 	w.Write([]byte(teststring))
 })
 
+func init() {
+	RegisterStaticHTTPHandler("OzoneTest", ozoneTestHandler)
+}
+
 var answerRequestConfig = `{
     "HTTP" : {
         "HelloServer" : {
@@ -94,11 +104,14 @@ var answerRequestConfig = `{
     }
 }
 `
-
+// TestAnswerRequest verifies that a handler can respond to requests
 func TestAnswerRequest(t *testing.T) {
 	var done = make(chan struct{})
 	go func() {
-		ozonemain(strings.NewReader(answerRequestConfig))
+		err := ozonemain(strings.NewReader(answerRequestConfig))
+		if err != nil {
+			stdlog.Fatal(err)
+		}
 		close(done)
 	}()
 
@@ -122,6 +135,9 @@ func TestAnswerRequest(t *testing.T) {
 
 //----------------------------------------------------
 
+// Test create 2 HTTP server and a proxy which puts the 2 servers in a backend cluster.
+// Test that there's a reasonable load balancing between the two servers.
+
 type handlerConfig struct {
 	Reply string
 }
@@ -136,6 +152,10 @@ func createHandler(name string, js jconf.SubConfig, handlerByName func(string) (
 		w.Write([]byte(cfg.Reply))
 	})
 	return
+}
+
+func init() {
+	RegisterHTTPHandlerType("testhandler", createHandler)
 }
 
 var proxyConfig = `{
@@ -225,7 +245,7 @@ func TestProxy(t *testing.T) {
 	go func() {
 		err := ozonemain(strings.NewReader(proxyConfig))
 		if err != nil {
-			t.Fatal(err)
+			stdlog.Fatal(err)
 		}
 		close(done)
 	}()
@@ -265,4 +285,96 @@ func TestProxy(t *testing.T) {
 	if c2-c1 > maxdiff || c1-c2 > maxdiff {
 		t.Error("Proxy cluster not balanced")
 	}
+}
+
+//----------------------------------------------------------------
+var recursiveConfig = `{
+    "HTTP" : {
+        "Main" : {
+            "Listeners" : {
+                "http" : {
+                    "Port" : 8180
+                }
+            },
+            "Handler" : "handler1"
+        }
+    },
+    "Handlers" : {
+        "handler1" : {
+             "Type" : "rhandler",
+             "Config" : {
+                   "Handler" : "handler2"
+              }
+        },
+        "handler2" : {
+             "Type" : "rhandler",
+             "Config" : {
+                   "Handler" : "handler3"
+              }
+        },
+        "handler3" : {
+             "Type" : "testhandler",
+             "Config" : {
+                    "Reply" : "3"
+              }
+        }
+    }
+}
+`
+
+type rhandlerConfig struct {
+	Handler string
+}
+
+func createRHandler(name string, js jconf.SubConfig, handlerByName func(string) (http.Handler, error)) (h http.Handler, cleanup func() error, err error) {
+
+	var cfg *rhandlerConfig
+	err = js.ParseInto(&cfg)
+	if err != nil {
+		return
+	}
+	h2, e := handlerByName(cfg.Handler)
+	if e != nil {
+		err = e
+		return
+	}
+
+	h = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h2.ServeHTTP(w, r)
+	})
+	return
+}
+
+func init() {
+	RegisterHTTPHandlerType("rhandler", createRHandler)
+}
+
+
+func TestHandlerResolution(t *testing.T) {
+	done := make(chan struct{})
+
+	go func() {
+		err := ozonemain(strings.NewReader(recursiveConfig))
+		if err != nil {
+			stdlog.Fatal(err)
+		}
+		close(done)
+	}()
+
+	resp, err := http.Get("http://localhost:8180")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if string(data) != "3" {
+		t.Error("No ok response")
+	}
+
+	shutdown(t)
+	<-done
 }

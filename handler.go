@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"path/filepath"
 	"plugin"
-	"sync"
 
 	"github.com/One-com/gone/daemon"
 	"github.com/One-com/gone/jconf"
@@ -20,26 +19,8 @@ import (
 // The function is passed a way to lookup other handlers by name of it needs to wrap around them.
 type HandlerConfigureFunc func(name string, cfg jconf.SubConfig, lookupHandler func(string) (http.Handler, error)) (handler http.Handler, cleanup func() error, err error)
 
-// Variables to help build handler setup resolution.
-// When configuring a handler it is passed a handlerByName() function which
-// lets it lookup another named handler. If that handler is not configured it
-// should be done at that point. However, we don't want to carry the total handler config
-// as a parameter through all handlers. (they shouldn't care who other handlers are configured).
-// ... so handlerByName() should be a closure over total handler config.
-// Sadly ... it also needs to be recursive. - and recursive closures in Go is... well... hard.
-// So the whole process of configuring handlers needs to have the config as a global variable
-// and thus be serialized through this mutex and these variables.  ... :(
-var (
-	handlerResolutionMutex sync.Mutex
 
-	handlerResolutionMap  map[string]http.Handler
-	handlerCfg            config.HandlersConfig
-	handlerCleanups       []daemon.CleanupFunc
-	handlerServices       []daemon.Server
-	handlerResolutionPath []string // to detect handler cycles
-)
-
-//
+// global statically configured handlers and handlertypes
 var handlerTypes = map[string]HandlerConfigureFunc{}
 var staticHandlers = map[string]http.Handler{
 	"NotFound": http.NotFoundHandler(),
@@ -63,23 +44,40 @@ func RegisterStaticHTTPHandler(name string, h http.Handler) {
 	staticHandlers[name] = h
 }
 
-// A new handler resolution is done each time instantiateServersFromConfig is called.
-// Caller must have locked handlerResolutionMutex
-func handlerResolutionReset(cfg config.HandlersConfig) {
-	handlerResolutionMap = make(map[string]http.Handler)
-	handlerCfg = cfg
-	handlerCleanups = nil
-	handlerServices = nil
-	handlerResolutionPath = nil // detecting cycles
+// handlerRegistry used to build handler setup resolution.
+// When configuring a handler it is passed a handlerByName() function which
+// lets it lookup another named handler. Handlers can use handlerByName() to recursively
+// resolve other handlers.
+type handlerRegistry struct {
+	resolutionMap  map[string]http.Handler
+	cfg            config.HandlersConfig
+
+	cleanups       []daemon.CleanupFunc
+	services       []daemon.Server
+	resolutionPath []string // to detect handler cycles
 }
 
-func handlerForSpec(srvName string, handlerSpec interface{}) (handler http.Handler, err error) {
+func newHandlerRegistry(cfg config.HandlersConfig) (r *handlerRegistry) {
+	r = &handlerRegistry{cfg: cfg}
+	r.resolutionMap = make(map[string]http.Handler)
+	return
+}
+
+func (r *handlerRegistry) Services() []daemon.Server {
+	return r.services
+}
+func (r *handlerRegistry) Cleanups() []daemon.CleanupFunc {
+	return r. cleanups
+}
+
+// HandlerForSpec creates a http.Handler based on the provided handlerSpec by looking up the config.
+func (r *handlerRegistry) HandlerForSpec(srvName string, handlerSpec interface{}) (handler http.Handler, err error) {
 
 	// Create a HTTP Handler for the Service.
 	switch handlerKind := handlerSpec.(type) {
 	case string:
 		// Single Handler for all URLs
-		handler, err = handlerByName(handlerKind)
+		handler, err = r.handlerByName(handlerKind)
 		if err != nil {
 			err = fmt.Errorf("Handler(%s): %s", handlerKind, err.Error())
 		}
@@ -90,7 +88,7 @@ func handlerForSpec(srvName string, handlerSpec interface{}) (handler http.Handl
 			var phandler http.Handler // handler for a specific URL path
 			switch handlerName := handlerIName.(type) {
 			case string:
-				phandler, err = handlerByName(handlerName)
+				phandler, err = r.handlerByName(handlerName)
 				if err != nil {
 					err = fmt.Errorf("Handler(%s): %s", handlerName, err.Error())
 				}
@@ -116,11 +114,11 @@ func handlerForSpec(srvName string, handlerSpec interface{}) (handler http.Handl
 
 // given a name of a handler, return it if it's already configured,
 // else configure it - if possible and return it.
-func handlerByName(name string) (handler http.Handler, err error) {
+func (r *handlerRegistry) handlerByName(name string) (handler http.Handler, err error) {
 
 	// If we already have resolved this handler, return it.
 	var ok bool
-	if handler, ok = handlerResolutionMap[name]; ok {
+	if handler, ok = r.resolutionMap[name]; ok {
 		return
 	}
 
@@ -129,7 +127,7 @@ func handlerByName(name string) (handler http.Handler, err error) {
 	// This means handlers defined by config override static handlers
 	// from code.
 	var cfg config.HandlerConfig
-	if cfg, ok = handlerCfg[name]; !ok {
+	if cfg, ok = r.cfg[name]; !ok {
 		if handler, ok = staticHandlers[name]; !ok {
 			err = fmt.Errorf("No such handler config: %s", name)
 		}
@@ -138,15 +136,16 @@ func handlerByName(name string) (handler http.Handler, err error) {
 
 	// Need to configure this handler, but first
 	// check for cycles
-	for _, n := range handlerResolutionPath {
+	for _, n := range r.resolutionPath {
 		if n == name {
-			err = fmt.Errorf("Handler cycle detected for %s: %v", name, handlerResolutionPath)
+			err = fmt.Errorf("Handler cycle detected for %s: %v", name, r.resolutionPath)
+			return
 		}
 	}
-	pathlen := len(handlerResolutionPath)
-	handlerResolutionPath = append(handlerResolutionPath, name)
+	pathlen := len(r.resolutionPath)
+	r.resolutionPath = append(r.resolutionPath, name)
 	defer func() {
-		handlerResolutionPath = handlerResolutionPath[:pathlen]
+		r.resolutionPath = r.resolutionPath[:pathlen]
 	}()
 
 	// We didn't have the handler ready. Configure the handler from config.
@@ -154,7 +153,7 @@ func handlerByName(name string) (handler http.Handler, err error) {
 	var cf daemon.CleanupFunc
 	var handlerservice daemon.Server
 
-	handler, handlerservice, cf, err = handlerForConfig(name, &cfg)
+	handler, handlerservice, cf, err = r.handlerForConfig(name, &cfg)
 	if err != nil {
 		return
 	}
@@ -175,21 +174,21 @@ func handlerByName(name string) (handler http.Handler, err error) {
 			}
 		}
 		// Store the handler for later lookup to avoid re-initializing
-		handlerResolutionMap[name] = handler
+		r.resolutionMap[name] = handler
 	}
 
 	if handlerservice != nil {
-		handlerServices = append(handlerServices, handlerservice)
+		r.services = append(r.services, handlerservice)
 	}
-	handlerCleanups = append(handlerCleanups, cleanupfuncs...)
+	r.cleanups = append(r.cleanups, cleanupfuncs...)
 	return
 }
 
-func handlerForConfig(name string, cfg *config.HandlerConfig) (handler http.Handler, service daemon.Server, cleanup daemon.CleanupFunc, err error) {
+func (r *handlerRegistry) handlerForConfig(name string, cfg *config.HandlerConfig) (handler http.Handler, service daemon.Server, cleanup daemon.CleanupFunc, err error) {
 
 	// Load the handler from a plugin
 	if cfg.Plugin != "" {
-		handler, cleanup, err = handlerFromPlugin(name, cfg)
+		handler, cleanup, err = r.handlerFromPlugin(name, cfg)
 		if err != nil {
 			return
 		}
@@ -209,13 +208,11 @@ func handlerForConfig(name string, cfg *config.HandlerConfig) (handler http.Hand
 				}
 				handler = proxy
 			}
-		//case "NotFound":
-		//	handler = http.NotFoundHandler()
 		case "Redirect":
 			handler, err = makeRedirectHandler(cfg.Config)
 		default:
 			if hinit, ok := handlerTypes[cfg.Type]; ok {
-				h, c, e := hinit(name, cfg.Config, handlerByName)
+				h, c, e := hinit(name, cfg.Config, r.handlerByName)
 				return h, nil, c, e
 			}
 			err = fmt.Errorf("No such Handler type: %s", cfg.Type)
@@ -227,7 +224,7 @@ func handlerForConfig(name string, cfg *config.HandlerConfig) (handler http.Hand
 
 // handlerFromPlugin loads the plugin, it then tries to look for a HandlerTypeMap, and if not found
 // it assumed the plugin as manually registered the handler type in it's init() function.
-func handlerFromPlugin(name string, cfg *config.HandlerConfig) (handler http.Handler, cleanup func() error, err error) {
+func (r *handlerRegistry) handlerFromPlugin(name string, cfg *config.HandlerConfig) (handler http.Handler, cleanup func() error, err error) {
 	abspath, e := filepath.Abs(cfg.Plugin)
 	if e != nil {
 		err = e
@@ -256,7 +253,7 @@ func handlerFromPlugin(name string, cfg *config.HandlerConfig) (handler http.Han
 		err = errors.New("Defect handler plugin type initialization function")
 	}
 
-	return f(name, cfg.Config, handlerByName)
+	return f(name, cfg.Config, r.handlerByName)
 }
 
 func makeRedirectHandler(js jconf.SubConfig) (handler http.Handler, err error) {
