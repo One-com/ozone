@@ -250,6 +250,11 @@ func getCiphers(cfg *CipherConfig) (ciphers []uint16, err error) {
 
 	ciphers = make([]uint16, 0, 20) // 20 is what some relatively sane OpenSSL cipher spec returns on Debian Jessie
 
+	if cfg == nil {
+		err = fmt.Errorf("Missing TLS/CipherSuites spec")
+		return
+	}
+
 	switch cfg.Format {
 	case "openssl":
 		var spec string
