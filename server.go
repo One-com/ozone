@@ -243,8 +243,12 @@ func (r *tlsPluginRegistry) getTLSPlugin(name string) (cb func(*tls.Config) erro
 		return // not found
 	}
 
+	// Test if the Plugin Type should already exist (might be statically loaded)
+	var initf TLSPluginConfigureFunc
+	initf, exists = tlsPluginTypes[cfg.Type]
+
 	// Try see if the name requires loading a plugin
-	if cfg.Plugin != "" {
+	if (cfg.Type != "" || !exists) && cfg.Plugin != "" {
 
 		filename := cfg.Plugin
 		if filename[0] != '/' {
@@ -282,21 +286,23 @@ func (r *tlsPluginRegistry) getTLSPlugin(name string) (cb func(*tls.Config) erro
 			f = (*m)[cfg.Type]
 		}
 
-		if f == nil {
-			err = errors.New("No TLS plugin initializer")
-			return
-		}
-
-		var servers []daemon.Server
-		var cleanups []daemon.CleanupFunc
-		cb, servers, cleanups, err = f(name, cfg.Config)
-		if err != nil {
-			return
-		}
-
-		r.Services = append(r.Services, servers...)
-		r.Cleanups = append(r.Cleanups, cleanups...)
+		initf = f
 	}
+
+	if initf == nil {
+		err = errors.New("No TLS plugin initializer")
+		return
+	}
+
+	var servers []daemon.Server
+	var cleanups []daemon.CleanupFunc
+	cb, servers, cleanups, err = initf(name, cfg.Config)
+	if err != nil {
+		return
+	}
+
+	r.Services = append(r.Services, servers...)
+	r.Cleanups = append(r.Cleanups, cleanups...)
 
 	return
 }
