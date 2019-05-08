@@ -10,6 +10,7 @@ import (
 	"github.com/One-com/gone/jconf"
 	"github.com/One-com/ozone/rproxymod"
 
+	"github.com/One-com/ozone/handlers/rproxy/module/backendsettings"
 	"github.com/One-com/ozone/handlers/rproxy/module/forward_map_director"
 	"github.com/One-com/ozone/handlers/rproxy/module/host_suffix_director"
 	"github.com/One-com/ozone/handlers/rproxy/module/proxypass"
@@ -30,6 +31,7 @@ func preloadBuiltinModules() {
 	moduleRegistry["host_suffix_director"] = host_suffix_director.InitModule
 	moduleRegistry["set_header"] = set_header.InitModule
 	moduleRegistry["proxypass"] = proxypass.InitModule
+	moduleRegistry["backendsettings"] = backendsettings.InitModule
 }
 
 // RegisterReverseProxyModule registers an initalization function for a reverse proxy
