@@ -14,7 +14,6 @@ type RequestContext struct {
 	sessionInfo map[string]string
 
 	// CtxCache provides cross-request caching
-	CtxCache      Cache
 	copiedHeaders bool
 
 	// Log will attach request session id to all log output
@@ -22,7 +21,7 @@ type RequestContext struct {
 }
 
 // NewRequestContext is used by the reverse proxy to create a new context for each request
-func NewRequestContext(ctxCache Cache, logger *log.Logger, key, id string) (*RequestContext, error) {
+func NewRequestContext(logger *log.Logger, key, id string) (*RequestContext, error) {
 	var err error
 	if id == "" {
 		id, err = getNextUUID()
@@ -34,7 +33,6 @@ func NewRequestContext(ctxCache Cache, logger *log.Logger, key, id string) (*Req
 	ctx := &RequestContext{
 		sessionId:   id,
 		sessionInfo: si,
-		CtxCache:    ctxCache,
 		Log:         logger.With(key, id),
 	}
 

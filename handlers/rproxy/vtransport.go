@@ -6,14 +6,14 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"time"
 	"sync"
+	"time"
 
 	"github.com/One-com/gone/http/vtransport"
 	"github.com/One-com/gone/http/vtransport/upstream/rr"
 
-	"github.com/One-com/gone/log"
 	"github.com/One-com/gone/jconf"
+	"github.com/One-com/gone/log"
 
 	"github.com/One-com/ozone/rproxymod"
 )
@@ -26,10 +26,10 @@ import (
 // If a host has MaxFails errors it will be put in Quarantine and request will be routes to a different
 // host.
 type VirtualTransportConfig struct {
-	Type             string
-	Retries          int
-	Upstreams        map[string][]string
-	Config           *jconf.OptionalSubConfig
+	Type      string
+	Retries   int
+	Upstreams map[string][]string
+	Config    *jconf.OptionalSubConfig
 	// Legacy
 	MaxFails         int
 	Quarantine       jconf.Duration
@@ -79,7 +79,7 @@ func (c *rrPinCache) Delete(key string) {
 	c.cc.Delete([]byte(key))
 }
 
-func initVirtualTransport(cc rproxymod.Cache, wrapped *http.Transport, js jconf.SubConfig) (vt *vtransport.VirtualTransport, servicefunc func(context.Context) error, err error) {
+func initVirtualTransport(wrapped *http.Transport, js jconf.SubConfig) (vt *vtransport.VirtualTransport, servicefunc func(context.Context) error, err error) {
 
 	cfg := new(VirtualTransportConfig)
 	err = js.ParseInto(&cfg)
@@ -117,8 +117,6 @@ func initVirtualTransport(cc rproxymod.Cache, wrapped *http.Transport, js jconf.
 			}
 		}
 	}
-
-	rrcache := &rrPinCache{cc: cc}
 
 	logger := log.Default()
 
@@ -158,7 +156,7 @@ func initVirtualTransport(cc rproxymod.Cache, wrapped *http.Transport, js jconf.
 		}
 
 		if rrcfg.BackendPin.Duration != 0 {
-			pinoption := rr.PinRequestsWith(rrcache, rrcfg.BackendPin.Duration,
+			pinoption := rr.PinRequestsWith(nil, rrcfg.BackendPin.Duration,
 				rr.PinKeyFunc(func(req *http.Request) string {
 					key := req.Header.Get(rrcfg.RoutingKeyHeader)
 					return key
@@ -169,7 +167,7 @@ func initVirtualTransport(cc rproxymod.Cache, wrapped *http.Transport, js jconf.
 		if rrcfg.HealthCheck != nil &&
 			rrcfg.HealthCheck.Timeout.Duration != 0 {
 
-			client := &http.Client{Timeout: rrcfg.HealthCheck.Timeout.Duration }
+			client := &http.Client{Timeout: rrcfg.HealthCheck.Timeout.Duration}
 
 			checkfunc := func(u *url.URL) error {
 				u2 := *healthuri
@@ -182,7 +180,7 @@ func initVirtualTransport(cc rproxymod.Cache, wrapped *http.Transport, js jconf.
 				}
 				res.Body.Close()
 				if res.StatusCode != rrcfg.HealthCheck.Expect {
-					return fmt.Errorf("Expected %d, got %d", rrcfg.HealthCheck.Expect, res.StatusCode )
+					return fmt.Errorf("Expected %d, got %d", rrcfg.HealthCheck.Expect, res.StatusCode)
 				}
 				return nil
 			}

@@ -23,8 +23,6 @@ import (
 	"github.com/One-com/ozone/tlsconf"
 
 	"github.com/One-com/ozone/config"
-
-	"github.com/One-com/ozone/handlers/rproxy/cache"
 )
 
 // PLUGINPATH can be set by linker to define a default proxy module dir
@@ -91,8 +89,8 @@ type OzoneProxy struct {
 	reverseProxy
 	modules  []rproxymod.ProxyModule
 	modnames []string
-	cache    rproxymod.Cache
-	service  func(context.Context) error
+	// cache    rproxymod.Cache
+	service func(context.Context) error
 }
 
 // NewProxy instantiates a new reverse proxy handler based on the provided JSON config
@@ -114,11 +112,11 @@ func NewProxy(name string, js jconf.SubConfig) (proxy *OzoneProxy, err error) {
 		return
 	}
 
-	var cc rproxymod.Cache
-	cc, err = cache.NewCache(cfg.Cache)
-	if err != nil {
-		return
-	}
+	// var cc rproxymod.Cache
+	// cc, err = cache.NewCache(cfg.Cache)
+	// if err != nil {
+	// 	return
+	// }
 
 	var tCfg = cfg.Transport
 	var tlsCfg *tls.Config
@@ -193,7 +191,7 @@ func NewProxy(name string, js jconf.SubConfig) (proxy *OzoneProxy, err error) {
 	var service func(context.Context) error // if non-nil, should be called to perform autonomous handler activity
 	switch transportType {
 	case "Virtual":
-		transport, service, err = initVirtualTransport(cc, defaultTransport, cfg.Transport.Config)
+		transport, service, err = initVirtualTransport(defaultTransport, cfg.Transport.Config)
 		if err != nil {
 			return nil, err
 		}
@@ -234,11 +232,11 @@ func NewProxy(name string, js jconf.SubConfig) (proxy *OzoneProxy, err error) {
 			Transport: transport,
 			// We can ignore Director - it will never get called.
 		},
-		modules: modules,
+		modules:  modules,
 		modnames: cfg.ModuleOrder,
 		//name:    name + "[" + mod_names + "]",
-		cache: cc,
-		service : service,
+		//cache:   cc,
+		service: service,
 	}
 
 	return proxy, nil
@@ -246,7 +244,7 @@ func NewProxy(name string, js jconf.SubConfig) (proxy *OzoneProxy, err error) {
 
 // An object representing any autonomous activity the proxy handler might
 // perform - like health check on backends.
-type proxyservice struct{
+type proxyservice struct {
 	service func(context.Context) error
 }
 
@@ -307,7 +305,7 @@ func (p *OzoneProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	// Instead of just a call to "Director" we invoke a chain of modules.
 
 	var res *http.Response = nil
-	reqCtx, err := rproxymod.NewRequestContext(p.cache, log.Default(), RIDKEY, req.Header.Get(RIDKEY))
+	reqCtx, err := rproxymod.NewRequestContext(log.Default(), RIDKEY, req.Header.Get(RIDKEY))
 	if err != nil {
 		sendErrorResponse(rw, http.StatusInternalServerError, err)
 		return
@@ -467,10 +465,6 @@ func (p *OzoneProxy) Deinit() error {
 		if err != nil {
 			rError = rError + " " + err.Error()
 		}
-	}
-	err := p.cache.Close()
-	if err != nil {
-		rError = rError + " " + err.Error()
 	}
 
 	if rError != "" {
