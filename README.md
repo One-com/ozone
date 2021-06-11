@@ -1,3 +1,7 @@
+# Version2 of ozone
+
+Cache has been removed in order to remove dependencies for CGO and now the caching is up to the client otherwise the interface is the same.
+
 # ozone
 Golang HTTP daemon engine.
 
