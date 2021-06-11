@@ -1,0 +1,27 @@
+{
+    "HTTP" : {
+        "HelloServer" : {
+            "Listeners" : {
+                "https" : {
+                    "Port" : 8181,
+                    "TLS" : {
+                        "CipherSuites": {
+                            "Format"  : "openssl",
+                            "Ciphers" : "HIGH:!aNULL"
+                        },
+                        "TLSPlugin" : "autocert"
+                    }
+                }
+            },
+            "Handler" : "NotFound"
+        }
+    },
+    "TLSPlugins" : {
+        "autocert" : {
+            "Type" : "autocert",
+            "Plugin" : "autocert.so",
+            "Config" : {}
+        }
+    },
+    "TLSPluginDir" : "."
+}
