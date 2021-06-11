@@ -1,4 +1,4 @@
-module github.com/One-com/ozone
+module github.com/One-com/ozone/v2
 
 go 1.16
 
